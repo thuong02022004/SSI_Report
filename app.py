@@ -49,27 +49,21 @@ def is_vietnam_holiday(dt):
         "09-02",  # Quốc khánh
         "09-03"   # Quốc khánh (ngày bổ sung)
     ]
-    
-    # Cấu hình các ngày nghỉ Tết Nguyên Đán động (Ví dụ mẫu cho năm 2026)
     lunar_holidays_2026 = ["02-16", "02-17", "02-18", "02-19", "02-20"]
-    
     return (md in holidays) or (dt.strftime("%Y-%m-%d") in lunar_holidays_2026)
 
 def calculate_trading_fees(trading_value):
     """
     HÀM TỰ ĐỘNG TÍNH PHÍ GIAO DỊCH VÀ PHÍ NET
+    - Phí giao dịch công ty được hưởng = 0.25% giá trị giao dịch
+    - Phí net của CTV = 30% của tiền phí giao dịch đó
     """
-    if trading_value < 100000000:  # Dưới 100 triệu
-        company_fee = trading_value * 0.0025  # Công ty được 0.25%
-        net_fee = company_fee * 0.30          # CTV được 30%
-    else:  # Từ 100 triệu trở lên (1 tỷ sẽ rơi vào đây)
-        company_fee = trading_value * 0.0025  # Hoặc thay bằng tỷ lệ VIP khác của công ty bạn
-        net_fee = company_fee * 0.30          # Hoặc thay bằng tỷ lệ % hoa hồng mới
-        
+    company_fee = trading_value * 0.0025  # Công ty được 0.25%
+    net_fee = company_fee * 0.30          # CTV được 30% của tiền phí giao dịch
     return company_fee, net_fee
 
 
-# --- 4. CÁC HÀM XỬ LÝ DỮ LIỆU NHÂN VIÊN (CRUD GIỮ NGUYÊN) ---
+# --- 4. CÁC HÀM XỬ LÝ DỮ LIỆU NHÂN VIÊN (CRUD) ---
 def insert_employee(name, dob_str, age, start_date_str, role, note):
     records = main_sheet_obj.get_all_records()
     next_id_num = len(records) + 1
@@ -81,7 +75,6 @@ def insert_employee(name, dob_str, age, start_date_str, role, note):
     current_sheets = [ws.title for ws in spreadsheet.worksheets()]
     if name not in current_sheets:
         employee_sheet = spreadsheet.add_worksheet(title=name, rows="1000", cols="20")
-        # Khởi tạo các cột thông tin giao dịch chuẩn: cột 3 là Phí giao dịch, cột 4 là Phí net
         employee_sheet.append_row(['Phiên giao dịch', 'Giá trị giao dịch', 'Phí giao dịch', 'Phí net', 'KH mới', 'KH chuyển ID'])
     return emp_id
 
@@ -113,6 +106,7 @@ def delete_employee(emp_id, name):
 
 
 # --- 5. GIAO DIỆN ỨNG DỤNG STREAMLIT ---
+st.set_page_config(layout="wide")  # Kích hoạt giao diện màn hình rộng để dàn trang biểu đồ
 st.title("📊 Hệ thống Quản lý Nhân sự & Hiệu suất Giao dịch")
 
 selected_sheet_name = st.sidebar.selectbox("📂 Chọn trang tính để làm việc:", all_worksheets)
@@ -239,7 +233,13 @@ if is_main_sheet:
 else:
     # --- GIAO DIỆN HIỆU SUẤT CỦA TỪNG NHÂN VIÊN CỤ THỂ ---
     st.sidebar.success(f"💼 Nhân viên: {selected_sheet_name}")
-    tab_trade_input, tab_trade_view = st.tabs(["📥 Nhập số liệu phiên", "📋 Nhật ký giao dịch chi tiết"])
+    
+    # Khởi tạo 3 tab chức năng bao gồm tab Phân tích & Đồ thị mới
+    tab_trade_input, tab_trade_view, tab_analysis = st.tabs([
+        "📥 Nhập số liệu phiên", 
+        "📋 Nhật ký giao dịch chi tiết", 
+        "📊 Phân tích & Biểu đồ xu hướng"
+    ])
     
     with tab_trade_input:
         st.subheader(f"Cập nhật số liệu KPI Phiên giao dịch - [{selected_sheet_name}]")
@@ -248,7 +248,6 @@ else:
             col1, col2 = st.columns(2)
             with col1:
                 trade_date = st.date_input("Chọn phiên giao dịch (Ngày):", value=datetime.today())
-                # Người dùng CHỈ cần nhập Giá trị giao dịch, hệ thống tự lo phần còn lại
                 trading_value = st.number_input("Giá trị giao dịch (VNĐ):", min_value=0.0, step=10000000.0, format="%.2f")
             with col2:
                 new_kh = st.number_input("Số lượng KH mới phát triển:", min_value=0, step=1)
@@ -268,16 +267,16 @@ else:
             else:
                 with st.spinner("Hệ thống đang tự động tính toán Phí giao dịch (0.25%) và Phí Net (30%)..."):
                     try:
-                        # 🌟 SỬA TẠI ĐÂY: Hứng đúng 2 biến trả về từ hàm là company_fee và net_fee
+                        # SỬA LỖI: Gán chính xác cặp biến trả về từ hàm tính toán
                         company_fee, net_fee = calculate_trading_fees(trading_value)
                         
                         trade_date_str = trade_date.strftime("%d/%m/%Y")
                         
-                        # Đồng bộ mảng lưu trữ: ['Phiên giao dịch', 'Giá trị giao dịch', 'Phí giao dịch', 'Phí net', 'KH mới', 'KH chuyển ID']
+                        # Khớp đúng cấu trúc mảng để đẩy xuống Google Sheet con
                         trade_row = [trade_date_str, trading_value, company_fee, net_fee, new_kh, move_id_kh]
                         
                         sheet.append_row(trade_row)
-                        st.success(f"🎉 Khóa sổ thành công phiên {trade_date_str}! Phí GD Công ty: {company_fee:,.0f} VNĐ | Phí Net CTV nhận về: **{net_fee:,.0f} VNĐ**")
+                        st.success(f"🎉 Khóa sổ thành công phiên {trade_date_str}! Phí GD Công ty (0.25%): {company_fee:,.0f} VNĐ | Phí Net CTV nhận về (30%): **{net_fee:,.0f} VNĐ**")
                     except Exception as e:
                         st.error(f"Lỗi ghi nhận dữ liệu giao dịch: {e}")
 
@@ -290,11 +289,124 @@ else:
         if len(trade_records) > 0:
             df_trade = pd.DataFrame(trade_records)
             
-            # Khớp định dạng hiển thị tiền tệ
+            # Định dạng hiển thị chuỗi tiền tệ phân tách hàng nghìn cho người dùng dễ nhìn
+            df_display = df_trade.copy()
             for col in ['Giá trị giao dịch', 'Phí giao dịch', 'Phí net']:
-                if col in df_trade.columns:
-                    df_trade[col] = df_trade[col].map(lambda x: f"{x:,.0f}" if isinstance(x, (int, float)) else x)
+                if col in df_display.columns:
+                    df_display[col] = df_display[col].map(lambda x: f"{x:,.0f}" if isinstance(x, (int, float)) else x)
                     
-            st.dataframe(df_trade, use_container_width=True)
+            st.dataframe(df_display, use_container_width=True)
         else:
             st.info("Nhân viên này hiện tại chưa có dữ liệu giao dịch phát sinh.")
+
+    # 🌟 TAB 3: PHÂN TÍCH CHU KỲ (TUẦN/THÁNG/QUÝ) & 2 BIỂU ĐỒ TĂNG TRƯỞNG
+    with tab_analysis:
+        st.subheader(f"📈 Trung tâm Phân tích Hiệu suất & Phát triển Khách hàng: {selected_sheet_name}")
+        
+        trade_records = sheet.get_all_records()
+        if len(trade_records) > 0:
+            df_raw = pd.DataFrame(trade_records)
+            
+            # Khởi tạo cột trục thời gian chuẩn hóa để tính toán gom nhóm dữ liệu
+            try:
+                df_raw['Date_Parsed'] = pd.to_datetime(df_raw['Phiên giao dịch'], format="%d/%m/%Y")
+            except Exception:
+                st.error("Lỗi: Dữ liệu cột 'Phiên giao dịch' trên Google Sheet không đồng bộ định dạng Ngày/Tháng/Năm!")
+                st.stop()
+                
+            # Ép kiểu dữ liệu số để tránh lỗi tính toán
+            df_raw['Phí net'] = pd.to_numeric(df_raw['Phí net'], errors='coerce').fillna(0)
+            df_raw['Giá trị giao dịch'] = pd.to_numeric(df_raw['Giá trị giao dịch'], errors='coerce').fillna(0)
+            df_raw['KH mới'] = pd.to_numeric(df_raw['KH mới'], errors='coerce').fillna(0)
+            df_raw['KH chuyển ID'] = pd.to_numeric(df_raw['KH chuyển ID'], errors='coerce').fillna(0)
+            
+            # Sắp xếp tăng dần theo dòng thời gian
+            df_raw = df_raw.sort_values(by='Date_Parsed')
+            
+            # --- 3.1 CHỌN CHU KỲ THỜI GIAN CHÈN DỮ LIỆU ---
+            time_filter = st.radio("Cấu hình báo cáo tổng hợp theo chu kỳ:", ["Báo cáo Tuần", "Báo cáo Tháng", "Báo cáo Quý"], horizontal=True)
+            
+            if time_filter == "Báo cáo Tuần":
+                df_raw['Thời gian'] = df_raw['Date_Parsed'].dt.to_period('W').astype(str)
+            elif time_filter == "Báo cáo Tháng":
+                df_raw['Thời gian'] = df_raw['Date_Parsed'].dt.to_period('M').astype(str)
+            else:
+                df_raw['Thời gian'] = df_raw['Date_Parsed'].dt.to_period('Q').astype(str)
+                
+            # Gom nhóm tổng lũy kế theo chu kỳ đã chọn
+            df_grouped = df_raw.groupby('Thời gian').agg({
+                'Phí net': 'sum',
+                'Giá trị giao dịch': 'sum',
+                'KH mới': 'sum',
+                'KH chuyển ID': 'sum'
+            }).reset_index()
+            
+            # --- 3.2 THẺ ĐO LƯỜNG KPI TỔNG HỢP ---
+            st.markdown("### 📊 Chỉ số tích lũy tổng quan")
+            kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
+            with kpi_col1:
+                st.metric("Tổng Phí Net nhận về", f"{df_raw['Phí net'].sum():,.0f} VNĐ")
+            with kpi_col2:
+                st.metric("Tổng Doanh số Giao dịch", f"{df_raw['Giá trị giao dịch'].sum():,.0f} VNĐ")
+            with kpi_col3:
+                st.metric("Tổng KH Mới phát triển", f"{int(df_raw['KH mới'].sum())} KH")
+            with kpi_col4:
+                st.metric("Tổng KH Chuyển ID", f"{int(df_raw['KH chuyển ID'].sum())} KH")
+                
+            st.markdown("---")
+            
+            # --- 3.3 DÀN TRANG HIỂN THỊ SONG SONG 2 BIỂU ĐỒ ---
+            chart_col1, chart_col2 = st.columns(2)
+            
+            with chart_col1:
+                st.markdown(f"#### 📈 1. Xu hướng tăng trưởng doanh thu Phí Net ({time_filter})")
+                # Biểu đồ đường (Line Chart) thể hiện mức độ tăng trưởng doanh thu theo thời gian
+                df_net_chart = df_grouped.set_index('Thời gian')[['Phí net']]
+                st.line_chart(df_net_chart, use_container_width=True)
+                
+            with chart_col2:
+                st.markdown(f"#### 👥 2. Biểu đồ tăng trưởng quy mô số lượng Khách hàng")
+                # Tạo cột tổng lượng khách hàng phát triển trong kỳ đó
+                df_grouped['Tổng KH mới trong kỳ'] = df_grouped['KH mới'] + df_grouped['KH chuyển ID']
+                df_kh_chart = df_grouped.set_index('Thời gian')[['Tổng KH mới trong kỳ']]
+                # Biểu đồ cột (Bar Chart) thể hiện sự tăng trưởng tập khách hàng qua từng chu kỳ
+                st.bar_chart(df_kh_chart, use_container_width=True)
+                
+            # --- 3.4 BIỂU ĐỒ TRÒN XEM TỶ LỆ CƠ CẤU KHÁCH HÀNG ---
+            st.markdown("### 🍕 3. Phân tích Tỷ lệ cơ cấu Tập khách hàng")
+            total_new = df_raw['KH mới'].sum()
+            total_moved = df_raw['KH chuyển ID'].sum()
+            
+            if (total_new + total_moved) > 0:
+                # Chuẩn bị bảng dữ liệu cơ cấu phần trăm
+                pie_data = pd.DataFrame({
+                    'Loại khách hàng': ['Khách hàng mới', 'Khách hàng chuyển ID'],
+                    'Số lượng': [total_new, total_moved]
+                })
+                
+                # Vẽ biểu đồ cơ cấu bằng cách tận dụng st.bar_chart dạng hoành độ thành phần (stacked) hoặc hiển thị bảng tỷ lệ trực quan
+                c1, c2 = st.columns([1, 2])
+                with c1:
+                    st.markdown("**Bảng phân rã tỷ lệ chi tiết:**")
+                    pct_new = (total_new / (total_new + total_moved)) * 100
+                    pct_moved = (total_moved / (total_new + total_moved)) * 100
+                    st.write(f"🔹 **Khách hàng mới tinh:** {int(total_new)} người ({pct_new:.1f}%)")
+                    st.write(f"🔸 **Khách hàng chuyển ID:** {int(total_moved)} người ({pct_moved:.1f}%)")
+                with c2:
+                    # Hiển thị biểu đồ thanh ngang so sánh cơ cấu thành phần khách hàng chiếm tỷ lệ cao
+                    df_pie_chart = pie_data.set_index('Loại khách hàng')
+                    st.bar_chart(df_pie_chart, use_container_width=True)
+            else:
+                st.info("Chưa có dữ liệu số lượng khách hàng để phân tích cơ cấu tỷ lệ.")
+                
+            st.markdown("---")
+            
+            # --- 3.5 BẢNG DỮ LIỆU TỔNG HỢP CUỐI KỲ ---
+            st.markdown(f"### 📋 Bảng số liệu tổng hợp lũy kế chi tiết ({time_filter})")
+            df_grouped_display = df_grouped.copy()
+            df_grouped_display['Phí net'] = df_grouped_display['Phí net'].map('{:,.0f}'.format)
+            df_grouped_display['Giá trị giao dịch'] = df_grouped_display['Giá trị giao dịch'].map('{:,.0f}'.format)
+            st.dataframe(df_grouped_display, use_container_width=True)
+            
+        else:
+            st.info("Nhân viên này hiện chưa phát sinh bản ghi dữ liệu giao dịch nào để phân tích xu hướng.")
